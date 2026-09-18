@@ -28,8 +28,10 @@ export function CheckboxOptionGroup({
       <legend className="block text-sm font-bold text-brand-700">{legend}</legend>
       {hint && <p className="mt-1 text-xs text-brand-400">{hint}</p>}
 
-      {/* 옵션 배열 길이에 따라 자동으로 늘어나거나 줄어드는 grid 컨테이너 */}
-      <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
+      {/* 옵션 배열 길이에 따라 자동으로 늘어나거나 줄어드는 grid 컨테이너.
+          모바일 폭에서는 auto-fill이 한 줄에 1개씩만 들어가는 경우가 많아 2열로 고정하고,
+          화면이 넓어지면(sm 이상) 다시 자동 배치로 전환한다. */}
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
         {options.map((option) => (
           <motion.label
             key={option.id}

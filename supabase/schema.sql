@@ -30,25 +30,28 @@ comment on column public.participants.max_match_count is '희망 매칭 인원: 
 -- ============================================================
 create table if not exists public.appeal_point_options (
   id uuid primary key default gen_random_uuid(),
-  label text not null unique,
+  label text not null,
   gender_scope text not null default 'all' check (gender_scope in ('all', 'male', 'female')),
   display_order int not null default 0,
   is_active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint appeal_point_options_label_gender_scope_unique unique (label, gender_scope)
 );
 
 create table if not exists public.ideal_type_options (
   id uuid primary key default gen_random_uuid(),
-  label text not null unique,
+  label text not null,
   gender_scope text not null default 'all' check (gender_scope in ('all', 'male', 'female')),
   display_order int not null default 0,
   is_active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint ideal_type_options_label_gender_scope_unique unique (label, gender_scope)
 );
 
-comment on table public.appeal_point_options is '나의 매력 어필 포인트 선택지 마스터';
-comment on table public.ideal_type_options is '선호하는 이상형 선택지 마스터';
-comment on column public.appeal_point_options.gender_scope is '이 옵션을 보여줄 대상 성별. all이면 남녀 모두에게 노출';
+comment on table public.appeal_point_options is '나의 매력 어필 포인트 선택지 마스터. 반대 성별에게는 "이상형" 선택지로 자동 추가됨';
+comment on table public.ideal_type_options is '"이상형" 질문에만 추가로 노출되는 옵션 (반대 성별 어필 포인트와 별개로 직접 등록하는 이상형 전용 문구)';
+comment on column public.appeal_point_options.gender_scope is '이 옵션을 자기소개로 보여줄 성별. 반대 성별에게는 이상형 옵션으로도 노출됨. all이면 양쪽 다 자기소개로 노출';
+comment on column public.ideal_type_options.gender_scope is '이 옵션을 이상형 선택지로 보여줄 성별(본인 기준). all이면 남녀 모두에게 노출';
 
 -- ============================================================
 -- 3. 매핑 테이블 (참가자 <-> 선택한 옵션, N:M)
@@ -60,18 +63,38 @@ create table if not exists public.participant_appeal_points (
   primary key (participant_id, appeal_point_option_id)
 );
 
+-- "이상형" 선택지는 두 소스에서 올 수 있다: (1) 반대 성별의 appeal_point_options 자동 연결
+-- (2) ideal_type_options에 직접 등록한 이상형 전용 옵션. 한 행은 둘 중 정확히 하나만 가리킨다.
 create table if not exists public.participant_ideal_types (
+  id uuid primary key default gen_random_uuid(),
   participant_id uuid not null references public.participants(id) on delete cascade,
-  ideal_type_option_id uuid not null references public.ideal_type_options(id),
+  appeal_point_option_id uuid references public.appeal_point_options(id),
+  ideal_type_option_id uuid references public.ideal_type_options(id),
   created_at timestamptz not null default now(),
-  primary key (participant_id, ideal_type_option_id)
+  constraint participant_ideal_types_exactly_one_source check (
+    (appeal_point_option_id is not null and ideal_type_option_id is null)
+    or
+    (appeal_point_option_id is null and ideal_type_option_id is not null)
+  )
 );
+
+-- 같은 참가자가 같은 옵션을 두 번 선택할 수 없도록 (소스별로 각각) 부분 유니크 인덱스 적용
+create unique index if not exists participant_ideal_types_appeal_unique
+  on public.participant_ideal_types (participant_id, appeal_point_option_id)
+  where appeal_point_option_id is not null;
+
+create unique index if not exists participant_ideal_types_ideal_unique
+  on public.participant_ideal_types (participant_id, ideal_type_option_id)
+  where ideal_type_option_id is not null;
 
 -- 매칭 로직에서 "이 옵션을 선택한 사람 목록" 조회가 빨라지도록 역방향 인덱스 추가
 create index if not exists idx_participant_appeal_points_option
   on public.participant_appeal_points (appeal_point_option_id);
 
-create index if not exists idx_participant_ideal_types_option
+create index if not exists idx_participant_ideal_types_appeal_option
+  on public.participant_ideal_types (appeal_point_option_id);
+
+create index if not exists idx_participant_ideal_types_ideal_option
   on public.participant_ideal_types (ideal_type_option_id);
 
 create index if not exists idx_participants_gender
@@ -92,7 +115,8 @@ create or replace function public.create_participant_application(
   p_phone text,
   p_max_match_count smallint,
   p_appeal_point_ids uuid[],
-  p_ideal_type_ids uuid[]
+  p_ideal_type_appeal_ids uuid[],
+  p_ideal_type_custom_ids uuid[]
 )
 returns uuid
 language plpgsql
@@ -111,9 +135,14 @@ begin
     select v_participant_id, opt_id from unnest(p_appeal_point_ids) as opt_id;
   end if;
 
-  if p_ideal_type_ids is not null and array_length(p_ideal_type_ids, 1) > 0 then
+  if p_ideal_type_appeal_ids is not null and array_length(p_ideal_type_appeal_ids, 1) > 0 then
+    insert into public.participant_ideal_types (participant_id, appeal_point_option_id)
+    select v_participant_id, opt_id from unnest(p_ideal_type_appeal_ids) as opt_id;
+  end if;
+
+  if p_ideal_type_custom_ids is not null and array_length(p_ideal_type_custom_ids, 1) > 0 then
     insert into public.participant_ideal_types (participant_id, ideal_type_option_id)
-    select v_participant_id, opt_id from unnest(p_ideal_type_ids) as opt_id;
+    select v_participant_id, opt_id from unnest(p_ideal_type_custom_ids) as opt_id;
   end if;
 
   return v_participant_id;
@@ -163,18 +192,57 @@ revoke all on function public.create_participant_application from public;
 grant execute on function public.create_participant_application to anon, authenticated;
 
 -- ============================================================
--- 7. 시드 데이터 (초기 옵션 3개씩) — 필요시 Supabase Studio 테이블 편집기에서 추가/수정 가능
+-- 7. 시드 데이터 (필요시 Supabase Studio 테이블 편집기에서 추가/수정 가능)
+--    appeal_point_options가 "나의 매력 어필 포인트"와 "상대 이상형" 옵션을 겸하므로
+--    gender_scope를 'all'이 아니라 실제 성별로 지정한다.
+--    ideal_type_options는 반대 성별 어필 포인트만으로는 부족한 "이상형 전용" 옵션을 추가할 때 쓴다
+--    (gender_scope는 이 옵션을 볼 "본인" 성별 기준 — 남자 폼에 보이게 하려면 'male').
 -- ============================================================
-insert into public.appeal_point_options (label, display_order)
+insert into public.appeal_point_options (label, gender_scope, display_order)
 values
-  ('유머러스하고 대화가 잘 통해요', 1),
-  ('다정하고 배려심이 많아요', 2),
-  ('적극적이고 리더십이 있어요', 3)
-on conflict (label) do nothing;
+  ('유머러스하고 대화가 잘 통해요', 'female', 1),
+  ('다정하고 배려심이 많아요', 'female', 2),
+  ('적극적이고 리더십이 있어요', 'female', 3),
+  ('듬직하고 믿음직해요', 'male', 1),
+  ('다정하고 배려심이 많아요', 'male', 2),
+  ('유머러스하고 대화가 잘 통해요', 'male', 3)
+on conflict (label, gender_scope) do nothing;
 
-insert into public.ideal_type_options (label, display_order)
+insert into public.ideal_type_options (label, gender_scope, display_order)
 values
-  ('유머러스한 사람이 좋아요', 1),
-  ('다정하고 배려심 많은 사람이 좋아요', 2),
-  ('취미나 관심사가 잘 맞는 사람이 좋아요', 3)
-on conflict (label) do nothing;
+  ('비흡연자였으면 좋겠어요', 'male', 1),
+  ('비흡연자였으면 좋겠어요', 'female', 1)
+on conflict (label, gender_scope) do nothing;
+
+-- ============================================================
+-- 8. 조회용 뷰 — UUID 대신 실제 선택 문구를 바로 볼 수 있도록 라벨까지 조인해서 펼쳐준다.
+--    Supabase Studio의 SQL Editor / Table Editor(Views)에서 조회·CSV 내보내기용으로 사용.
+--    anon/authenticated에게는 권한을 주지 않아 대시보드(관리자)에서만 조회 가능하다.
+-- ============================================================
+create or replace view public.participant_applications_readable as
+select
+  p.id,
+  p.created_at,
+  p.gender,
+  p.name,
+  p.age,
+  p.major,
+  p.phone,
+  p.max_match_count,
+  (
+    select string_agg(apo.label, ', ' order by apo.display_order)
+    from public.participant_appeal_points pap
+    join public.appeal_point_options apo on apo.id = pap.appeal_point_option_id
+    where pap.participant_id = p.id
+  ) as appeal_points,
+  (
+    select string_agg(coalesce(apo2.label, ito.label), ', ' order by coalesce(apo2.display_order, ito.display_order))
+    from public.participant_ideal_types pit
+    left join public.appeal_point_options apo2 on apo2.id = pit.appeal_point_option_id
+    left join public.ideal_type_options ito on ito.id = pit.ideal_type_option_id
+    where pit.participant_id = p.id
+  ) as ideal_types
+from public.participants p
+order by p.created_at desc;
+
+revoke all on public.participant_applications_readable from anon, authenticated;

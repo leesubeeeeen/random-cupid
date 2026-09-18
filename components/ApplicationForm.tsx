@@ -1,23 +1,17 @@
 "use client";
 
-import {
-  useActionState,
-  useEffect,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useActionState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import type { Gender } from "@/lib/supabase/types";
+import { submitApplication } from "@/app/apply/[gender]/actions";
 import {
   initialApplicationFormState,
-  submitApplication,
   type ApplicationFormState,
-} from "@/app/apply/[gender]/actions";
+} from "@/app/apply/[gender]/form-state";
 import { TextInput } from "./ui/TextInput";
 import { RadioPillGroup } from "./ui/RadioPillGroup";
 import { CheckboxOptionGroup } from "./CheckboxOptionGroup";
 import { SubmitSuccess } from "./SubmitSuccess";
-import { AlreadyApplied } from "./AlreadyApplied";
 
 interface Option {
   id: string;
@@ -28,24 +22,6 @@ interface ApplicationFormProps {
   gender: Gender;
   appealPointOptions: Option[];
   idealTypeOptions: Option[];
-}
-
-const STORAGE_KEY = "cupid_applied_v1";
-
-function subscribeNoop() {
-  return () => {};
-}
-
-function getAppliedSnapshot() {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function getAppliedServerSnapshot() {
-  return false;
 }
 
 export function ApplicationForm({
@@ -59,28 +35,8 @@ export function ApplicationForm({
     FormData
   >(boundAction, initialApplicationFormState);
 
-  const alreadyApplied = useSyncExternalStore(
-    subscribeNoop,
-    getAppliedSnapshot,
-    getAppliedServerSnapshot
-  );
-
-  useEffect(() => {
-    if (state.status === "success") {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, "true");
-      } catch {
-        // 로컬스토리지 사용 불가 시에도 신청 자체는 이미 완료된 상태이므로 무시
-      }
-    }
-  }, [state.status]);
-
   if (state.status === "success") {
     return <SubmitSuccess />;
-  }
-
-  if (alreadyApplied) {
-    return <AlreadyApplied />;
   }
 
   return (
@@ -129,7 +85,7 @@ export function ApplicationForm({
           id="major"
           name="major"
           label="전공(학과)"
-          placeholder="컴퓨터공학과"
+          placeholder="컴퓨터융합학부"
           error={state.fieldErrors?.major}
         />
       </FormRow>

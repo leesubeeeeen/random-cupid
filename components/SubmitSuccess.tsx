@@ -1,8 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
+const REDIRECT_DELAY_MS = 3000;
+
 export function SubmitSuccess() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.push("/");
+    }, REDIRECT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [router]);
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -24,6 +37,7 @@ export function SubmitSuccess() {
         소중한 정보 감사해요. 매칭 결과는 행사 운영진을 통해 안내드릴 예정이에요.
         설레는 만남을 기대해주세요 💌
       </p>
+      <p className="text-xs text-brand-300">잠시 후 처음 화면으로 이동해요</p>
     </motion.div>
   );
 }

@@ -2,6 +2,10 @@ import { z } from "zod";
 
 export const PHONE_REGEX = /^01[016789][0-9]{7,8}$/;
 
+// 이상형 체크박스는 두 소스에서 올 수 있어 "appeal:<uuid>"(반대 성별 어필 포인트 자동 연결) /
+// "ideal:<uuid>"(이상형 전용 추가 옵션) 형태의 합성 id로 렌더링된다.
+const IDEAL_TYPE_ID_REGEX = /^(appeal|ideal):([0-9a-fA-F-]{36})$/;
+
 export const genderSchema = z.enum(["male", "female"]);
 
 export const applicationFormSchema = z.object({
@@ -32,8 +36,21 @@ export const applicationFormSchema = z.object({
     .array(z.string().uuid())
     .min(1, "나의 매력 어필 포인트를 1개 이상 선택해주세요"),
   idealTypeIds: z
-    .array(z.string().uuid())
-    .min(1, "선호하는 이상형을 1개 이상 선택해주세요"),
+    .array(z.string().regex(IDEAL_TYPE_ID_REGEX, "잘못된 이상형 옵션이에요"))
+    .min(1, "선호하는 이상형을 1개 이상 선택해주세요")
+    .transform((values) => {
+      const appealIds: string[] = [];
+      const customIds: string[] = [];
+      for (const value of values) {
+        const [source, id] = value.split(":");
+        if (source === "appeal") {
+          appealIds.push(id);
+        } else {
+          customIds.push(id);
+        }
+      }
+      return { appealIds, customIds };
+    }),
 });
 
 export type ApplicationFormValues = z.infer<typeof applicationFormSchema>;

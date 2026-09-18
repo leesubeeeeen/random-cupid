@@ -33,7 +33,8 @@ export type Database = {
           p_phone: string;
           p_max_match_count: number;
           p_appeal_point_ids: string[];
-          p_ideal_type_ids: string[];
+          p_ideal_type_appeal_ids: string[];
+          p_ideal_type_custom_ids: string[];
         };
         Returns: string;
       };

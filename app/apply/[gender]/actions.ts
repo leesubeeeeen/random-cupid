@@ -6,16 +6,7 @@ import {
   type ApplicationFormFieldErrors,
 } from "@/lib/validation";
 import type { Gender } from "@/lib/supabase/types";
-
-export interface ApplicationFormState {
-  status: "idle" | "error" | "success";
-  fieldErrors?: ApplicationFormFieldErrors;
-  formError?: string;
-}
-
-export const initialApplicationFormState: ApplicationFormState = {
-  status: "idle",
-};
+import type { ApplicationFormState } from "./form-state";
 
 export async function submitApplication(
   gender: Gender,
@@ -55,7 +46,8 @@ export async function submitApplication(
     p_phone: values.phone,
     p_max_match_count: values.maxMatchCount,
     p_appeal_point_ids: values.appealPointIds,
-    p_ideal_type_ids: values.idealTypeIds,
+    p_ideal_type_appeal_ids: values.idealTypeIds.appealIds,
+    p_ideal_type_custom_ids: values.idealTypeIds.customIds,
   });
 
   if (error) {
@@ -65,6 +57,7 @@ export async function submitApplication(
         fieldErrors: { phone: "이미 신청이 완료된 전화번호예요" },
       };
     }
+    console.error("create_participant_application RPC failed:", error);
     return {
       status: "error",
       formError: "신청 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.",
