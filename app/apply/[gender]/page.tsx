@@ -31,39 +31,40 @@ export default async function ApplyPage({
 
   const supabase = createServerSupabaseClient();
 
-  // "이상형" 목록은 두 소스를 합친다:
-  // 1) 반대 성별의 매력 어필 포인트 (자동 연결)
-  // 2) 이상형 전용으로 직접 추가한 옵션 (ideal_type_options)
-  const [appealPointsResult, oppositeAppealResult, idealTypeExtrasResult] =
-    await Promise.all([
-      supabase
-        .from("appeal_point_options")
-        .select("id, label")
-        .in("gender_scope", ["all", gender])
-        .order("display_order", { ascending: true }),
-      supabase
-        .from("appeal_point_options")
-        .select("id, label")
-        .in("gender_scope", ["all", oppositeGender(gender)])
-        .order("display_order", { ascending: true }),
-      supabase
-        .from("ideal_type_options")
-        .select("id, label")
-        .in("gender_scope", ["all", gender])
-        .order("display_order", { ascending: true }),
-    ]);
+  const [{ data: questionRows }, { data: optionRows }] = await Promise.all([
+    supabase
+      .from("survey_questions")
+      .select("id, key, category, self_label, ideal_label, display_order")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
+    supabase
+      .from("survey_options")
+      .select("id, question_id, label, gender_scope, display_order")
+      .order("display_order", { ascending: true }),
+  ]);
 
-  const appealPointOptions = appealPointsResult.data ?? [];
-  const idealTypeOptions = [
-    ...(oppositeAppealResult.data ?? []).map((option) => ({
-      id: `appeal:${option.id}`,
-      label: option.label,
-    })),
-    ...(idealTypeExtrasResult.data ?? []).map((option) => ({
-      id: `ideal:${option.id}`,
-      label: option.label,
-    })),
-  ];
+  const opposite = oppositeGender(gender);
+
+  const questions = (questionRows ?? []).map((question) => {
+    const questionOptions = (optionRows ?? []).filter(
+      (option) => option.question_id === question.id
+    );
+    return {
+      id: question.id,
+      key: question.key,
+      category: question.category,
+      selfLabel: question.self_label,
+      idealLabel: question.ideal_label,
+      // 본인소개 페이지는 본인 성별 기준, 이상형 페이지는 반대 성별 기준으로 선택지를 보여준다
+      // (예: 키 질문 — gender_scope가 'all'인 질문은 두 페이지에 동일하게 노출됨)
+      selfOptions: questionOptions
+        .filter((option) => option.gender_scope === "all" || option.gender_scope === gender)
+        .map((option) => ({ id: option.id, label: option.label })),
+      idealOptions: questionOptions
+        .filter((option) => option.gender_scope === "all" || option.gender_scope === opposite)
+        .map((option) => ({ id: option.id, label: option.label })),
+    };
+  });
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-4 py-10 sm:px-6">
@@ -76,11 +77,7 @@ export default async function ApplyPage({
         </p>
       </header>
 
-      <ApplicationForm
-        gender={gender}
-        appealPointOptions={appealPointOptions}
-        idealTypeOptions={idealTypeOptions}
-      />
+      <ApplicationForm gender={gender} questions={questions} />
     </div>
   );
 }

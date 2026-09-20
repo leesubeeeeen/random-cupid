@@ -1,16 +1,29 @@
 export type Gender = "male" | "female";
 
-export type OptionRow = {
+export type SurveyCategory = "appearance" | "personality";
+
+export type SurveyQuestionRow = {
   id: string;
-  label: string;
-  gender_scope: "all" | "male" | "female";
+  key: string;
+  category: SurveyCategory;
+  self_label: string;
+  ideal_label: string;
   display_order: number;
   is_active: boolean;
   created_at: string;
 };
 
-type OptionTable = {
-  Row: OptionRow;
+export type SurveyOptionRow = {
+  id: string;
+  question_id: string;
+  label: string;
+  gender_scope: "all" | "male" | "female";
+  display_order: number;
+  created_at: string;
+};
+
+type ReadonlyTable<Row> = {
+  Row: Row;
   Insert: Record<string, never>;
   Update: Record<string, never>;
   Relationships: [];
@@ -19,8 +32,8 @@ type OptionTable = {
 export type Database = {
   public: {
     Tables: {
-      appeal_point_options: OptionTable;
-      ideal_type_options: OptionTable;
+      survey_questions: ReadonlyTable<SurveyQuestionRow>;
+      survey_options: ReadonlyTable<SurveyOptionRow>;
     };
     Views: Record<string, never>;
     Functions: {
@@ -32,9 +45,9 @@ export type Database = {
           p_major: string;
           p_phone: string;
           p_max_match_count: number;
-          p_appeal_point_ids: string[];
-          p_ideal_type_appeal_ids: string[];
-          p_ideal_type_custom_ids: string[];
+          p_self_option_ids: string[];
+          p_ideal_option_ids: string[];
+          p_must_match_question_ids: string[];
         };
         Returns: string;
       };
