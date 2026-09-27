@@ -217,6 +217,7 @@ from (values
   ('face_type', 'all', '늑대상', 5),
   ('face_type', 'all', '두부상', 6),
   ('face_type', 'all', '원숭이상', 7),
+  ('face_type', 'all', '공룡상', 8),
 
   -- 키: 성별마다 체감 구간이 달라 gender_scope로 분리.
   -- 본인소개에서는 본인 성별 옵션이, 이상형에서는 반대 성별 옵션이 노출된다.
