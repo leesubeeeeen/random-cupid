@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ApplicationForm } from "@/components/ApplicationForm";
 import type { Gender } from "@/lib/supabase/types";
+import { isRecruiting } from "@/lib/recruitment";
 
 const GENDER_LABEL: Record<Gender, string> = {
   female: "여성",
@@ -24,7 +25,7 @@ export default async function ApplyPage({
   params: Promise<{ gender: string }>;
 }) {
   const { gender: rawGender } = await params;
-  if (!isGender(rawGender)) {
+  if (!isGender(rawGender) || !isRecruiting(rawGender)) {
     notFound();
   }
   const gender = rawGender;

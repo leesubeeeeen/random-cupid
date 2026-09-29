@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { isRecruiting } from "@/lib/recruitment";
 
 const sides: {
   gender: "female" | "male";
@@ -29,7 +30,7 @@ const sides: {
 export function GenderPicker() {
   return (
     <div className="flex flex-1 flex-col md:flex-row">
-      {sides.map((side, index) => (
+      {sides.filter((side) => isRecruiting(side.gender)).map((side, index) => (
         <Link
           key={side.gender}
           href={side.href}

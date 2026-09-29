@@ -6,6 +6,7 @@ import {
   type ApplicationFormFieldErrors,
 } from "@/lib/validation";
 import type { Gender } from "@/lib/supabase/types";
+import { isRecruiting } from "@/lib/recruitment";
 import type { ApplicationFormState } from "./form-state";
 
 function parseAnswers(formData: FormData, prefix: string, questionIds: string[]) {
@@ -22,6 +23,10 @@ export async function submitApplication(
   _prevState: ApplicationFormState,
   formData: FormData
 ): Promise<ApplicationFormState> {
+  if (!isRecruiting(gender)) {
+    return { status: "error", formError: "현재 해당 성별의 신청은 마감되었어요." };
+  }
+
   const supabase = createServerSupabaseClient();
 
   const { data: questionRows, error: questionsError } = await supabase
